@@ -1,24 +1,15 @@
-use axum::{
-    routing,
-    Router,
-    extract::Extension,
-    response,
-};
-use hyper::{
-    Uri,
-    client::HttpConnector,
-    Body,
-    Response,
-};
+use axum::{extract::Extension, response::IntoResponse, routing, Router};
+use http::StatusCode;
+use hyper::{client::HttpConnector, Body, Client, Uri};
+use hyper_tls::HttpsConnector;
 use std::net::SocketAddr;
-
-type Client = hyper::client::Client<HttpConnector, Body>;
 
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt::init();
 
-    let client = Client::new();
+    let https = HttpsConnector::new();
+    let client = Client::builder().build::<_, Body>(https);
 
     let app = Router::new()
         .route("/", routing::get(root))
@@ -33,7 +24,17 @@ async fn main() {
         .unwrap();
 }
 
-async fn root<'a>(Extension(client): Extension<Client>) -> response::Response {
-    client.get(Uri::from_static("https://manifest.watchtube.app"))
-        .await?.body()
+async fn root<'a>(
+    Extension(client): Extension<Client<HttpsConnector<HttpConnector>>>,
+) -> Result<hyper::Response<Body>, (StatusCode, &'static str)> {
+    match client
+        .get(Uri::from_static("https://manifest.watchtube.app"))
+        .await
+    {
+        Ok(resp) => Ok(resp),
+        Err(err) => {
+            tracing::warn!("Error fetching WatchTube manifest: {:?}", err);
+            Err((StatusCode::INTERNAL_SERVER_ERROR, "Error fetching manifest"))
+        }
+    }
 }
