@@ -24,7 +24,7 @@ async fn main() {
         .unwrap();
 }
 
-async fn root<'a>(
+async fn root(
     Extension(client): Extension<Client<HttpsConnector<HttpConnector>>>,
 ) -> Result<hyper::Response<Body>, (StatusCode, &'static str)> {
     match client
