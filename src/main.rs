@@ -1,6 +1,7 @@
 use axum::{
-    routing, Router,
     extract::Extension,
+    response::{IntoResponse, Response},
+    routing, Router,
 };
 use tower::ServiceBuilder;
 use tower_http::trace::TraceLayer;
@@ -9,9 +10,7 @@ use std::net::SocketAddr;
 
 use anyhow::Context;
 
-//use tracing::Level;
-
-use watch_proxy::routes;
+use watch_proxy::types::ProxyError;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -19,7 +18,7 @@ async fn main() -> anyhow::Result<()> {
 
     let http_client = reqwest::Client::new();
 
-    let app = Router::new().route("/", routing::get(routes::root::root)).layer(
+    let app = Router::new().route("/", routing::get(root)).layer(
         ServiceBuilder::new()
             .layer(TraceLayer::new_for_http())
             .layer(Extension(http_client)),
@@ -36,4 +35,20 @@ async fn main() -> anyhow::Result<()> {
         .serve(app.into_make_service())
         .await
         .context("Failed to start web server for some reason")
+}
+
+pub async fn root(
+    Extension(client): Extension<reqwest::Client>,
+) -> Result<impl IntoResponse, ProxyError> {
+    Ok(Response::builder()
+        .header("Content-Type", "application/json")
+        .body(
+            client
+                .get("https://manifest.watchtube.app")
+                .send()
+                .await?
+                .text()
+                .await?,
+        )
+        .unwrap())
 }
